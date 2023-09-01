@@ -26,7 +26,7 @@ from torch.cuda.amp import autocast as autocast
 from torch.cuda.amp import GradScaler as GradScaler
 from torchvision.models import mobilenet_v2, MobileNet_V2_Weights, ShuffleNet_V2_X1_0_Weights
 
-from shufflenet import shufflenet_v2_x1_0
+# from shufflenet import shufflenet_v2_x1_0
 
 parser = argparse.ArgumentParser(description='PyTorch Training Script')
 parser.add_argument('--batch_size', type=int, default=32, metavar='N',
