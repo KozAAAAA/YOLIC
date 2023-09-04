@@ -3,50 +3,68 @@
 import random
 
 from PIL import Image
-from torch.optim.lr_scheduler import StepLR, MultiStepLR
+from torch.optim.lr_scheduler import MultiStepLR
 import argparse
 import numpy as np
 import torch
-import torchvision
-from torchvision import models
-from torchvision import transforms, datasets
-import torch.nn.functional as F
+from torchvision import transforms
 import torch.optim as optim
 from sklearn.model_selection import train_test_split
-from torch.optim.lr_scheduler import StepLR
 import torch.nn as nn
-import time
 import copy
-import cv2
 import os.path
-import matplotlib.pyplot as plt
 import pandas as pd
 import os
 from torch.cuda.amp import autocast as autocast
 from torch.cuda.amp import GradScaler as GradScaler
-from torchvision.models import mobilenet_v2, MobileNet_V2_Weights, ShuffleNet_V2_X1_0_Weights
+from torchvision.models import mobilenet_v2, MobileNet_V2_Weights
 
-# from shufflenet import shufflenet_v2_x1_0
-
-parser = argparse.ArgumentParser(description='PyTorch Training Script')
-parser.add_argument('--batch_size', type=int, default=32, metavar='N',
-                    help='input batch size for training (default: 64)')
-parser.add_argument('--test_batch', type=int, default=32, metavar='N',
-                    help='input batch size for testing (default: 64)')
-parser.add_argument('--epochs', type=int, default=150, metavar='N',
-                    help='number of epochs to train (default: 10)')
-parser.add_argument('--no-cuda', action='store_true', default=False,
-                    help='disables CUDA training')
-parser.add_argument('--seed', type=int, default=1, metavar='S',
-                    help='random seed (default: 1)')
-parser.add_argument('--log-interval', type=int, default=25, metavar='N',
-                    help='how many batches to wait before logging training status')
-parser.add_argument('--resume', type=bool, default=True, metavar='N',
-                    help='resume from the last weights')
+parser = argparse.ArgumentParser(description="PyTorch Training Script")
+parser.add_argument(
+    "--batch_size",
+    type=int,
+    default=32,
+    metavar="N",
+    help="input batch size for training (default: 64)",
+)
+parser.add_argument(
+    "--test_batch",
+    type=int,
+    default=32,
+    metavar="N",
+    help="input batch size for testing (default: 64)",
+)
+parser.add_argument(
+    "--epochs",
+    type=int,
+    default=150,
+    metavar="N",
+    help="number of epochs to train (default: 10)",
+)
+parser.add_argument(
+    "--no-cuda", action="store_true", default=False, help="disables CUDA training"
+)
+parser.add_argument(
+    "--seed", type=int, default=1, metavar="S", help="random seed (default: 1)"
+)
+parser.add_argument(
+    "--log-interval",
+    type=int,
+    default=25,
+    metavar="N",
+    help="how many batches to wait before logging training status",
+)
+parser.add_argument(
+    "--resume",
+    type=bool,
+    default=True,
+    metavar="N",
+    help="resume from the last weights",
+)
 
 NumCell = 104  # number of cells
 NumClass = 11  # number of classes
-save_name = 'mobilenet_outdoor'  # name of the model
+save_name = "mobilenet_outdoor"  # name of the model
 model = mobilenet_v2(weights=MobileNet_V2_Weights.DEFAULT)  # load the model
 model.classifier[1] = nn.Linear(1280, NumCell * (NumClass + 1))
 optimizer = optim.Adam(model.parameters(), lr=0.001)  # optimizer and learning rate
@@ -106,48 +124,155 @@ class MultiLabelRGBataSet(torch.utils.data.Dataset):
         annotation = os.path.join(self.annotationpath, filename + ".txt")
         label = np.loadtxt(annotation, dtype=np.int64)
         if random.random() > 0.5:
-            img, label = random_augmentation(img, label, [7, 6, 5, 4, 3, 2, 1, 0, 19, 18, 17, 16, 15, 14, 13, 12, 11,
-                                                          10, 9, 8, 31, 30, 29, 28, 27, 26, 25, 24, 23, 22, 21, 20, 47,
-                                                          46, 45, 44, 43, 42, 41, 40, 39, 38, 37, 36, 35, 34, 33, 32,
-                                                          63, 62, 61, 60, 59, 58, 57, 56, 55, 54, 53, 52, 51, 50, 49,
-                                                          48, 79, 78, 77, 76, 75, 74, 73, 72, 71, 70, 69, 68, 67, 66,
-                                                          65, 64, 95, 94, 93, 92, 91, 90, 89, 88, 87, 86, 85, 84, 83,
-                                                          82, 81, 80, 103, 102, 101, 100, 99, 98, 97, 96])
+            img, label = random_augmentation(
+                img,
+                label,
+                [
+                    7,
+                    6,
+                    5,
+                    4,
+                    3,
+                    2,
+                    1,
+                    0,
+                    19,
+                    18,
+                    17,
+                    16,
+                    15,
+                    14,
+                    13,
+                    12,
+                    11,
+                    10,
+                    9,
+                    8,
+                    31,
+                    30,
+                    29,
+                    28,
+                    27,
+                    26,
+                    25,
+                    24,
+                    23,
+                    22,
+                    21,
+                    20,
+                    47,
+                    46,
+                    45,
+                    44,
+                    43,
+                    42,
+                    41,
+                    40,
+                    39,
+                    38,
+                    37,
+                    36,
+                    35,
+                    34,
+                    33,
+                    32,
+                    63,
+                    62,
+                    61,
+                    60,
+                    59,
+                    58,
+                    57,
+                    56,
+                    55,
+                    54,
+                    53,
+                    52,
+                    51,
+                    50,
+                    49,
+                    48,
+                    79,
+                    78,
+                    77,
+                    76,
+                    75,
+                    74,
+                    73,
+                    72,
+                    71,
+                    70,
+                    69,
+                    68,
+                    67,
+                    66,
+                    65,
+                    64,
+                    95,
+                    94,
+                    93,
+                    92,
+                    91,
+                    90,
+                    89,
+                    88,
+                    87,
+                    86,
+                    85,
+                    84,
+                    83,
+                    82,
+                    81,
+                    80,
+                    103,
+                    102,
+                    101,
+                    100,
+                    99,
+                    98,
+                    97,
+                    96,
+                ],
+            )
         label = torch.tensor(label, dtype=torch.float32)
         return img, label, filename
 
 
-train_trans = transforms.Compose(([
+train_trans = transforms.Compose(
+    (
+        [
+            transforms.Resize((224, 224)),
+            transforms.ColorJitter(
+                brightness=0.5, contrast=0.5, saturation=0.5, hue=0.5
+            ),
+            transforms.ToTensor(),  # divides by 255
+        ]
+    )
+)
+val_test_trans = transforms.Compose(
+    ([transforms.Resize((224, 224)), transforms.ToTensor()])  # divides by 255
+)
 
-    transforms.Resize((224, 224)),
-    transforms.ColorJitter(brightness=0.5, contrast=0.5, saturation=0.5, hue=0.5),
-    transforms.ToTensor()  # divides by 255
-]))
-val_test_trans = transforms.Compose(([
-    transforms.Resize((224, 224)),
-    transforms.ToTensor()  # divides by 255
-]))
-
-img_dir = 'images'
-label_dir = 'yoliclabel'
+img_dir = "images"
+label_dir = "yoliclabel"
 img_list = os.listdir(img_dir)
-train_img, Val_Test = train_test_split(img_list, test_size=0.3, random_state=2)
-val_img, test_img = train_test_split(Val_Test, test_size=0.6666, random_state=2)
+train_img, val_test = train_test_split(img_list, test_size=0.3, random_state=2)
+val_img, test_img = train_test_split(val_test, test_size=0.6666, random_state=2)
 
 train = MultiLabelRGBataSet(img_dir, train_img, label_dir, train_trans)
 valid = MultiLabelRGBataSet(img_dir, val_img, label_dir, val_test_trans)
 test = MultiLabelRGBataSet(img_dir, test_img, label_dir, val_test_trans)
 
-train_loader = torch.utils.data.DataLoader(train,
-                                           batch_size=args.batch_size,
-                                           shuffle=True, num_workers=8)
-valid_loader = torch.utils.data.DataLoader(valid,
-                                           batch_size=args.batch_size,
-                                           shuffle=False, num_workers=8)
+train_loader = torch.utils.data.DataLoader(
+    train, batch_size=args.batch_size, shuffle=True, num_workers=8
+)
+valid_loader = torch.utils.data.DataLoader(
+    valid, batch_size=args.batch_size, shuffle=False, num_workers=8
+)
 
-test_loader = torch.utils.data.DataLoader(test,
-                                          batch_size=args.batch_size,
-                                          shuffle=False, num_workers=8)
+test_loader = torch.utils.data.DataLoader(
+    test, batch_size=args.batch_size, shuffle=False, num_workers=8
+)
 
 if args.cuda:
     model.cuda()
@@ -165,11 +290,13 @@ def pred_acc(original, predicted):
     enum = 0
     normal = np.asarray([0] * NumClass + [1])
     for cell in range(0, (NumCell * (NumClass + 1)), NumClass + 1):
-        if (orig[cell:cell + NumClass + 1] == pred[cell:cell + NumClass + 1]).all():
+        if (orig[cell : cell + NumClass + 1] == pred[cell : cell + NumClass + 1]).all():
             num = num + 1
         else:
-            if not (orig[cell:cell + NumClass + 1] == normal).all() and not (
-                    pred[cell:cell + NumClass + 1] == normal).all():
+            if (
+                not (orig[cell : cell + NumClass + 1] == normal).all()
+                and not (pred[cell : cell + NumClass + 1] == normal).all()
+            ):
                 enum = enum + 1
     return num / NumCell, (num + enum) / NumCell
 
@@ -186,9 +313,15 @@ def train(epoch, model):
         loss.backward()
         optimizer.step()
         if batch_idx % args.log_interval == 0:
-            print('Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.5f}'.format(
-                epoch, batch_idx * len(data), len(train_loader.dataset),
-                       100. * batch_idx / len(train_loader), loss.item()))
+            print(
+                "Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.5f}".format(
+                    epoch,
+                    batch_idx * len(data),
+                    len(train_loader.dataset),
+                    100.0 * batch_idx / len(train_loader),
+                    loss.item(),
+                )
+            )
 
 
 best_correct = -999
@@ -211,7 +344,9 @@ def evaluate(model, data_loader, save_mode=False):
             acc_all = []
             acc_binary = []
             for each_image, d in enumerate(output):
-                all_acc, b_acc = pred_acc(torch.Tensor.cpu(target[each_image]), torch.Tensor.cpu(d))
+                all_acc, b_acc = pred_acc(
+                    torch.Tensor.cpu(target[each_image]), torch.Tensor.cpu(d)
+                )
                 acc_all.append(all_acc)
                 acc_binary.append(b_acc)
             running_loss.append(loss.item())
@@ -220,20 +355,27 @@ def evaluate(model, data_loader, save_mode=False):
     total_batch_loss = np.asarray(running_loss).mean()
     total_batch_acc = np.asarray(running_acc).mean()
     total_batch_binary = np.asarray(running_binary).mean()
-    print('\n loader set: total_batch_loss: {:.4f}, total imgs: {} , Acc: ({:.4f}%), Binary ACC: ({:.4f}%)\n'.format(
-        total_batch_loss, len(data_loader.dataset), total_batch_acc, total_batch_binary))
+    print(
+        "\n loader set: total_batch_loss: {:.4f}, total imgs: {} , Acc: ({:.4f}%), Binary ACC: ({:.4f}%)\n".format(
+            total_batch_loss,
+            len(data_loader.dataset),
+            total_batch_acc,
+            total_batch_binary,
+        )
+    )
     if save_mode:
         now_correct = total_batch_acc
         if best_correct < now_correct:
             best_correct = now_correct
             best_model_wts = copy.deepcopy(model.state_dict())
-            torch.save(best_model_wts,
-                       os.path.join(os.getcwd(), save_name + ".pth.tar"))
+            torch.save(
+                best_model_wts, os.path.join(os.getcwd(), save_name + ".pth.tar")
+            )
             print("New weight!")
     return total_batch_loss, total_batch_acc
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     # test_loss, test_acc = test(model)
     import datetime
 
@@ -259,12 +401,27 @@ if __name__ == '__main__':
         scheduler.step()
     list_res = []
     for i in range(len(all_train_loss)):
-        list_res.append([all_train_loss[i], all_train_acc[i], all_val_loss[i], all_val_acc[i],
-                         all_test_loss[i], all_test_acc[i]])
+        list_res.append(
+            [
+                all_train_loss[i],
+                all_train_acc[i],
+                all_val_loss[i],
+                all_val_acc[i],
+                all_test_loss[i],
+                all_test_acc[i],
+            ]
+        )
 
-    column_name = ['train_loss', 'train_acc', 'val_loss', 'val_acc', 'test_loss', 'test_acc']
-    csv_name = save_name + '.csv'
+    column_name = [
+        "train_loss",
+        "train_acc",
+        "val_loss",
+        "val_acc",
+        "test_loss",
+        "test_acc",
+    ]
+    csv_name = save_name + ".csv"
     xml_df = pd.DataFrame(list_res, columns=column_name)
-    xml_df.to_csv(csv_name, index=None)
+    xml_df.to_csv(csv_name, index=False)
     end_time = datetime.datetime.now()
-    print('\nTime taken: {}\n'.format(end_time - start_time))
+    print("\nTime taken: {}\n".format(end_time - start_time))
