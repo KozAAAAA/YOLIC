@@ -1,3 +1,5 @@
+about-time==4.2.1
+alive-progress==3.1.4
 apturl==0.5.2
 asttokens==2.2.1
 backcall==0.2.0
@@ -29,6 +31,7 @@ distro-info==1.1+ubuntu0.1
 executing==1.2.0
 filelock==3.12.2
 fonttools==4.42.1
+grapheme==0.6.0
 html5lib==1.1
 httplib2==0.20.2
 i3-swap-focus==0.4.3
