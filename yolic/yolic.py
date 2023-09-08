@@ -1,4 +1,4 @@
-from os import listdir
+from os import listdir, pread
 
 from pathlib import Path
 
@@ -30,6 +30,8 @@ NUMBER_OF_CLASSES = 11
 
 IMAGE_DIR = Path("./data/images/")
 LABEL_DIR = Path("./data/labels/")
+
+YOLIC_MODEL_PATH = Path("yolic_model.pt")
 
 INPUT_WIDTH = 224
 INPUT_HEIGHT = 224
@@ -210,6 +212,8 @@ def main():
         test_dataset, batch_size=BATCH_SIZE, shuffle=True, num_workers=8
     )
 
+    # Train model
+    previous_validation_loss = float("inf")
     model.to(device)
     for epoch in range(EPOCHS):
         print(f"\nEpoch: {epoch} / {EPOCHS}")
@@ -226,16 +230,21 @@ def main():
             device=device,
             data_loader=validation_loader,
         )
+        scheduler.step()
 
         print(
-            f"Train loss: {epoch_train_loss}",
+            f"Train loss: {epoch_train_loss},",
             f"Train accuracy: {epoch_train_accuracy}",
         )
         print(
-            f"Validation loss: {epoch_validation_loss},"
+            f"Validation loss: {epoch_validation_loss},",
             f"Validation accuracy: {epoch_validation_accuracy}",
         )
-        scheduler.step()
+
+        if epoch_validation_loss < previous_validation_loss:
+            torch.save(model.state_dict(), YOLIC_MODEL_PATH)
+            previous_validation_loss = epoch_validation_loss
+            print(f"Saved new weights as {YOLIC_MODEL_PATH}")
 
 
 if __name__ == "__main__":
