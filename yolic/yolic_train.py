@@ -1,11 +1,11 @@
-from os import listdir, pread
+from yolic_common import *
 
+from os import listdir
+from typing import Any
 from pathlib import Path
 
 import numpy as np
-
-from PIL import Image
-from sklearn.utils import shuffle
+import pandas as pd
 
 from alive_progress import alive_bar
 
@@ -13,9 +13,10 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 from torch.optim.lr_scheduler import MultiStepLR
-from torch.utils.data import Dataset, DataLoader
+from torch.utils.data import DataLoader
 
-from torchvision.models import mobilenet_v2, MobileNet_V2_Weights
+from torchvision.models import MobileNet_V2_Weights
+
 from torchvision import transforms
 
 from sklearn.model_selection import train_test_split
@@ -23,57 +24,12 @@ from sklearn.model_selection import train_test_split
 
 EPOCHS = 150
 BATCH_SIZE = 55
-
 LEARNING_RATE = 0.001
-NUMBER_OF_COI = 104
-NUMBER_OF_CLASSES = 11
-
-IMAGE_DIR = Path("./data/images/")
-LABEL_DIR = Path("./data/labels/")
-
-YOLIC_MODEL_PATH = Path("yolic_model.pt")
 
 INPUT_WIDTH = 224
 INPUT_HEIGHT = 224
 
-
-class YolicDataset(Dataset):
-    """Yolic Dataset class used to load images and label"""
-
-    def __init__(
-        self,
-        image_dir: Path,
-        label_dir: Path,
-        image_names: list[str],
-        transform=None,
-    ):
-        """Initialize YolicDataset class"""
-        self._image_dir = image_dir
-        self._label_dir = label_dir
-        self._image_names = image_names
-        self._transform = transform
-
-    def __len__(self):
-        """Return the length of the dataset"""
-        return len(self._image_names)
-
-    def __getitem__(self, index):
-        image_name = self._image_names[index]
-
-        image_path = self._image_dir / image_name
-        label_path = self._label_dir / Path(image_name).with_suffix(".txt")
-
-        label = np.loadtxt(label_path, dtype=np.float32)
-        label = torch.from_numpy(label)
-
-        image = Image.open(image_path).convert("RGB")
-
-        if self._transform is not None:
-            image = self._transform(image)
-
-        # add random augmentation here
-
-        return image, label, image_name
+CSV_FILE = Path("training_data.csv")
 
 
 def split_dataset(
@@ -83,6 +39,7 @@ def split_dataset(
     test_ratio: float = 0.20,
 ):
     """Split data into train, validation and test sets"""
+
     assert train_ratio + validation_ratio + test_ratio == 1
     train, left_data = train_test_split(data, test_size=1 - train_ratio)
     validation, test = train_test_split(
@@ -93,9 +50,46 @@ def split_dataset(
     return train, validation, test
 
 
+# This function has been copied from the original yolic repository,
+# not fully understood yet
+def yolic_accuracy(
+    preds: torch.Tensor,
+    targets: torch.Tensor,
+) -> float:
+    """Calculate accuracy of the model"""
+    accuracy = 0.0
+    for i, pred in enumerate(preds):
+        target = targets[i]
+        target = torch.Tensor.cpu(target)
+        pred = torch.Tensor.cpu(pred)
+
+        pred = torch.round(pred).detach().numpy().astype(np.int64)
+        target = target.detach().numpy()
+        pred = np.reshape(pred, (NUMBER_OF_COIS * (NUMBER_OF_CLASSES + 1), 1)).flatten()
+        target = np.reshape(
+            target, (NUMBER_OF_COIS * (NUMBER_OF_CLASSES + 1), 1)
+        ).flatten()
+        num = 0
+        single_accuracy = 0.0
+        for cell in range(
+            0, (NUMBER_OF_COIS * (NUMBER_OF_CLASSES + 1)), NUMBER_OF_CLASSES + 1
+        ):
+            if (
+                target[cell : cell + NUMBER_OF_CLASSES + 1]
+                == pred[cell : cell + NUMBER_OF_CLASSES + 1]
+            ).all():
+                num = num + 1
+
+            single_accuracy = num / NUMBER_OF_COIS
+        accuracy += single_accuracy
+    accuracy = accuracy / len(preds)
+    return accuracy
+
+
 def train_step(
     model: nn.Module,
-    loss_fn: nn.Module,
+    loss_fn: Any,
+    accuracy_fn: Any,
     optimizer: optim.Optimizer,
     device: torch.device,
     data_loader: DataLoader,
@@ -103,51 +97,62 @@ def train_step(
     """Perform a single training step"""
 
     train_loss = 0.0
+    train_accuracy = 0.0
     model.train()
     with alive_bar(len(data_loader)) as bar:
-        for _, (images, labels, _) in enumerate(data_loader):
+        for images, labels, _ in data_loader:
             images = images.to(device)
             labels = labels.to(device)
+
+            optimizer.zero_grad()
 
             # forward pass
             output = model(images)
             loss = loss_fn(output, labels)
             train_loss += loss.item()
 
+            output = torch.sigmoid(output)  # should i use it here or in the model?
+            train_accuracy += accuracy_fn(output, labels)
+
             # backward pass
-            optimizer.zero_grad()
             loss.backward()
             optimizer.step()
 
-            # update progress bar
+            # update the progress bar
             bar()
 
     train_loss = train_loss / len(data_loader)
-    train_accuracy = 0.0  # add accuracy calculation here
+    train_accuracy = train_accuracy / len(data_loader)
     return train_loss, train_accuracy
 
 
 def validation_step(
     model: nn.Module,
-    loss_fn: nn.Module,
+    loss_fn: Any,
+    accuracy_fn: Any,
     device: torch.device,
     data_loader: DataLoader,
 ) -> tuple[float, float]:
     """Perform validation of a model"""
 
     validation_loss = 0.0
+    validation_accuracy = 0.0
     model.eval()
     with torch.no_grad():
-        for _, (images, labels, _) in enumerate(data_loader):
+        for images, labels, _ in data_loader:
             images = images.to(device)
             labels = labels.to(device)
 
             output = model(images)
+
             loss = loss_fn(output, labels)
             validation_loss += loss.item()
 
+            output = torch.sigmoid(output)  # should i use it here or in the model?
+            validation_accuracy += accuracy_fn(output, labels)
+
     validation_loss = validation_loss / len(data_loader)
-    validation_accuracy = 0.0  # add accuracy calculation here
+    validation_accuracy = validation_accuracy / len(data_loader)
     return validation_loss, validation_accuracy
 
 
@@ -157,11 +162,9 @@ def main():
     print(f"Using {device}")
 
     # Declare model, loss function, optimizer and scheduler
-    model = mobilenet_v2(weights=MobileNet_V2_Weights.DEFAULT)
-    model.classifier[1] = nn.Linear(
-        in_features=model.last_channel,
-        out_features=(NUMBER_OF_COI * (NUMBER_OF_CLASSES + 1)),
-    )
+    model = yolic_net(weights=MobileNet_V2_Weights.DEFAULT)
+    model.to(device)
+
     loss_fn = nn.BCEWithLogitsLoss()
     optimizer = optim.Adam(model.parameters(), lr=LEARNING_RATE)
     scheduler = MultiStepLR(optimizer, milestones=[100, 125], gamma=0.1)
@@ -184,7 +187,7 @@ def main():
 
     # Split datasets
     train_image_names, validation_image_names, test_image_names = split_dataset(
-        listdir(IMAGE_DIR)
+        listdir(IMAGE_DIR), train_ratio=0.84, validation_ratio=0.15, test_ratio=0.01
     )
     print(f"Train data: {len(train_image_names)}")
     print(f"Validation data: {len(validation_image_names)}")
@@ -213,13 +216,18 @@ def main():
     )
 
     # Train model
-    previous_validation_loss = float("inf")
-    model.to(device)
+
+    train_loss = []
+    validation_loss = []
+    train_accuracy = []
+    validation_accuracy = []
+    previous_validation_accuracy = 0.0
     for epoch in range(EPOCHS):
-        print(f"\nEpoch: {epoch} / {EPOCHS}")
+        print(f"\nEpoch: {epoch+1} / {EPOCHS}")
         epoch_train_loss, epoch_train_accuracy = train_step(
             model=model,
             loss_fn=loss_fn,
+            accuracy_fn=yolic_accuracy,
             optimizer=optimizer,
             device=device,
             data_loader=train_loader,
@@ -227,6 +235,7 @@ def main():
         epoch_validation_loss, epoch_validation_accuracy = validation_step(
             model=model,
             loss_fn=loss_fn,
+            accuracy_fn=yolic_accuracy,
             device=device,
             data_loader=validation_loader,
         )
@@ -241,10 +250,25 @@ def main():
             f"Validation accuracy: {epoch_validation_accuracy}",
         )
 
-        if epoch_validation_loss < previous_validation_loss:
+        if epoch_validation_accuracy > previous_validation_accuracy:
             torch.save(model.state_dict(), YOLIC_MODEL_PATH)
-            previous_validation_loss = epoch_validation_loss
+            previous_validation_accuracy = epoch_validation_accuracy
             print(f"Saved new weights as {YOLIC_MODEL_PATH}")
+
+        train_loss.append(epoch_train_loss)
+        validation_loss.append(epoch_validation_loss)
+        train_accuracy.append(epoch_train_accuracy)
+        validation_accuracy.append(epoch_validation_accuracy)
+
+        pd.DataFrame(
+            {
+                "train_loss": train_loss,
+                "validation_loss": validation_loss,
+                "tain_accuracy": train_accuracy,
+                "validation_accuracy": validation_accuracy,
+            }
+        ).to_csv(CSV_FILE, index=False)
+        print(f"Saved metrics as {CSV_FILE}")
 
 
 if __name__ == "__main__":
