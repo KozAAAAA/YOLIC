@@ -1,27 +1,23 @@
+from yolic_common import (
+    NUMBER_OF_CLASSES,
+    YOLIC_MODEL_PATH,
+    IMAGE_DIR,
+    LABEL_DIR,
+    yolic_net,
+    YolicDataset,
+)
+
 import cv2
-from torchvision.models import mobilenet_v2
 import numpy as np
 import torch
 from torchvision import transforms
 from sklearn.model_selection import train_test_split
-import torch.nn as nn
 import os.path
 import os
 
 
 torch.cuda.empty_cache()
 
-NumCell = 104  # number of cells
-NumClass = 11  # number of classes except background class
-model = mobilenet_v2()  # load the model
-model.classifier = nn.Sequential(
-    nn.Dropout(p=0.2),
-    nn.Linear(
-        in_features=model.last_channel,
-        out_features=(NumCell * (NumClass + 1)),
-    ),
-)
-model.load_state_dict(torch.load("yolic_model.pt"))
 save_name = "generated_images"
 points_list = [
     (288, 166),
@@ -306,60 +302,32 @@ color_box = [
 ]
 
 
-class MultiLabelRGBataSet(torch.utils.data.Dataset):
-    def __init__(self, imgspath, imgslist, annotationpath, transforms=None, train=1):
-        self.imgslist = imgslist
-        self.imgspath = imgspath
-        self.transform = transforms
-        self.annotationpath = annotationpath
-        self.train = train
-
-    def __len__(self):
-        return len(self.imgslist)
-
-    def __getitem__(self, index):
-        ipath = os.path.join(self.imgspath, self.imgslist[index])
-        img = cv2.imread(ipath)
-        (filename, extension) = os.path.splitext(ipath)
-        filename = os.path.basename(filename)
-        annotation = os.path.join(self.annotationpath, filename + ".txt")
-        label = np.loadtxt(annotation, dtype=np.int64)
-        label = torch.tensor(label, dtype=torch.float32)
-        return img, label, filename
-
-
-img_dir = "data/images"
-label_dir = "data/labels"
-img_list = os.listdir(img_dir)
-train_img, val_test = train_test_split(img_list, test_size=0.3, random_state=2)
-val_img, test_img = train_test_split(val_test, test_size=0.6666, random_state=2)
-test_dataset = MultiLabelRGBataSet(img_dir, test_img, label_dir, train=0)
-
-
 def pred_plot(frame, original, output):
     orig = original.detach().numpy()
     output = output.detach().numpy()
     pred = np.where(output > 0.001, 1, 0).tolist()
     cell = 0
-    normal = np.asarray([0] * NumClass + [1])
+    normal = np.asarray([0] * NUMBER_OF_CLASSES + [1])
     for rect in cell_list:
         x1, y1 = rect[0]
         x2, y2 = rect[1]
-        # cv2.rectangle(frame, tuple(rect[0]), tuple(rect[1]), color=(0, 0, 0), thickness=3)
-        each = pred[cell : cell + NumClass + 1]
-        eachScore = output[cell : cell + NumClass + 1]
-        # each = orig[cell:cell + NumClass + 1]
+        cv2.rectangle(
+            frame, tuple(rect[0]), tuple(rect[1]), color=(0, 0, 0), thickness=3
+        )  # print black rectangles if background detected
+        each = pred[cell : cell + NUMBER_OF_CLASSES + 1]
+        eachScore = output[cell : cell + NUMBER_OF_CLASSES + 1]
+        # each = orig[cell : cell + NUMBER_OF_CLASSES + 1]
         if not (each == normal).all():
             index = [i for i, x in enumerate(each) if x == 1]
             if len(index) == 0:
                 index.append(eachScore.argmax())
-                if eachScore.argmax() == NumClass:
+                if eachScore.argmax() == NUMBER_OF_CLASSES:
                     continue
-            center_x, center_y = (x1 + x2) // 2, (y1 + y2) // 2  # 计算矩形中心点
-            poly_area = (x2 - x1) * (y2 - y1)  # 计算矩形面积
-            default_text_scale = 0.4  # 这是默认的字体大小，可以根据你的需要进行调整
-            texts = []  # 用于存储所有的文本和对应的大小
-            max_text_len = len(index)  # 计算最长的文本长度
+            center_x, center_y = (x1 + x2) // 2, (y1 + y2) // 2
+            poly_area = (x2 - x1) * (y2 - y1)
+            default_text_scale = 0.4
+            texts = []
+            max_text_len = len(index)
             if max_text_len > 1:
                 text_scale = default_text_scale * min(
                     1, np.sqrt(poly_area) / max_text_len
@@ -372,23 +340,26 @@ def pred_plot(frame, original, output):
                 )
                 texts.append((class_names[i], text_size, text_scale))
             text_origin = [center_x, center_y - sum(text[1][1] for text in texts) // 2]
-            line_spacing = 0.7  # 行间距，可以根据需要调整
+            line_spacing = 0.7
             color = color_box[index[0]]
             for text, text_size, text_scale in texts:
-                text_origin[0] = center_x - text_size[0] // 2  # 每行的x坐标需要重新计算以保证居中
-                text_origin[1] += int(text_size[1] * line_spacing)  # y坐标加上当前行文本的高度的一部分
-                # cv2.putText(frame, text, tuple(text_origin), cv2.FONT_HERSHEY_SIMPLEX, text_scale, (255, 255, 255), 1)
-                text_origin[1] += int(
-                    text_size[1] * line_spacing
-                )  # y坐标再加上当前行文本的高度的一部分，为下一行文本做准备
+                text_origin[0] = center_x - text_size[0] // 2
+                text_origin[1] += int(text_size[1] * line_spacing)
+                cv2.putText(
+                    frame,
+                    text,
+                    tuple(text_origin),
+                    cv2.FONT_HERSHEY_SIMPLEX,
+                    text_scale,
+                    (255, 255, 255),
+                    1,
+                )  # Add text in the middle of the rectangle
+                text_origin[1] += int(text_size[1] * line_spacing)
             cv2.rectangle(
                 frame, tuple(rect[0]), tuple(rect[1]), color=color, thickness=3
             )
-        cell += NumClass + 1
+        cell += NUMBER_OF_CLASSES + 1
     return frame
-
-
-preprocess = transforms.Compose([transforms.ToTensor()])
 
 
 def main():
@@ -397,11 +368,27 @@ def main():
     if not os.path.exists(path):
         os.makedirs(path)
 
+    model = yolic_net()
+    model.load_state_dict(torch.load(YOLIC_MODEL_PATH))
+
+    train_img, val_test = train_test_split(
+        os.listdir(IMAGE_DIR), test_size=0.3, random_state=2
+    )
+    val_img, test_img = train_test_split(val_test, test_size=0.6666, random_state=2)
+    test_dataset = YolicDataset(IMAGE_DIR, LABEL_DIR, test_img)
+
+    preprocess = transforms.Compose([transforms.ToTensor()])
+
     model.eval()
     with torch.no_grad():
         for batch_idx, (image, target, filename) in enumerate(test_dataset):
-            resize_image = cv2.resize(image, (224, 224))
-            input_tensor = preprocess(resize_image)
+            image = cv2.cvtColor(
+                np.array(image), cv2.COLOR_RGB2BGR
+            )  # not necessary if transform in dataset
+            resize_image = cv2.resize(
+                image, (224, 224)
+            )  # use transform in dataset instead
+            input_tensor = preprocess(resize_image)  # use transform in dataset instead
             input_batch = input_tensor.unsqueeze(0)
             output = model(input_batch)
             output = torch.sigmoid(output)

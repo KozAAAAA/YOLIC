@@ -18,7 +18,8 @@ LABEL_DIR = Path("./data/labels/")
 YOLIC_MODEL_PATH = Path("yolic_model.pt")
 
 
-# lacks data augmentation as in the original code
+# TODO: lacks data augmentation as in the original code
+# TODO: if there is no transform applied, image is returned as PIL.Image
 class YolicDataset(Dataset):
     """Yolic Dataset class used to load images and label"""
 
@@ -35,11 +36,15 @@ class YolicDataset(Dataset):
         self._image_names = image_names
         self._transform = transform
 
-    def __len__(self):
+    def __len__(self) -> int:
         """Return the length of the dataset"""
         return len(self._image_names)
 
-    def __getitem__(self, index):
+    def __getitem__(
+        self, index
+    ) -> tuple[Image.Image | torch.Tensor, torch.Tensor, str]:
+        """Return image, label and image name"""
+
         image_name = self._image_names[index]
 
         image_path = self._image_dir / image_name
@@ -52,13 +57,11 @@ class YolicDataset(Dataset):
 
         if self._transform is not None:
             image = self._transform(image)
-
         # add random augmentation here
-
         return image, label, image_name
 
 
-def yolic_net(weights) -> nn.Module:
+def yolic_net(weights=None) -> nn.Module:
     """Returns a Yolic model"""
 
     model = mobilenet_v2(weights=weights)
