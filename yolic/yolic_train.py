@@ -1,6 +1,16 @@
-from yolic_common import *
+from yolic_common import (
+    NUMBER_OF_COIS,
+    NUMBER_OF_CLASSES,
+    YOLIC_MODEL_PATH,
+    YOLIC_NET_INPUT_HEIGHT,
+    YOLIC_NET_INPUT_WIDTH,
+    TRAIN_IMAGE_DIR,
+    VAL_IMAGE_DIR,
+    LABEL_DIR,
+    yolic_net,
+    YolicDataset,
+)
 
-from os import listdir
 from typing import Any
 from pathlib import Path
 
@@ -16,38 +26,12 @@ from torch.optim.lr_scheduler import MultiStepLR
 from torch.utils.data import DataLoader
 
 from torchvision.models import MobileNet_V2_Weights
-
 from torchvision import transforms
-
-from sklearn.model_selection import train_test_split
-
 
 EPOCHS = 150
 BATCH_SIZE = 55
 LEARNING_RATE = 0.001
-
-INPUT_WIDTH = 224
-INPUT_HEIGHT = 224
-
 CSV_FILE = Path("training_data.csv")
-
-
-def split_dataset(
-    data: list,
-    train_ratio: float = 0.60,
-    validation_ratio: float = 0.20,
-    test_ratio: float = 0.20,
-):
-    """Split data into train, validation and test sets"""
-
-    assert train_ratio + validation_ratio + test_ratio == 1
-    train, left_data = train_test_split(data, test_size=1 - train_ratio)
-    validation, test = train_test_split(
-        left_data,
-        test_size=test_ratio / (test_ratio + validation_ratio),
-        random_state=1,
-    )
-    return train, validation, test
 
 
 # This function has been copied from the original yolic repository,
@@ -173,7 +157,7 @@ def main():
     train_transform = transforms.Compose(
         (
             [
-                transforms.Resize((INPUT_HEIGHT, INPUT_WIDTH)),
+                transforms.Resize((YOLIC_NET_INPUT_HEIGHT, YOLIC_NET_INPUT_WIDTH)),
                 transforms.ColorJitter(
                     brightness=0.5, contrast=0.5, saturation=0.5, hue=0.5
                 ),
@@ -181,28 +165,20 @@ def main():
             ]
         )
     )
-    test_and_validation_transform = transforms.Compose(
-        ([transforms.Resize((INPUT_HEIGHT, INPUT_WIDTH)), transforms.ToTensor()])
+    validation_transform = transforms.Compose(
+        (
+            [
+                transforms.Resize((YOLIC_NET_INPUT_HEIGHT, YOLIC_NET_INPUT_WIDTH)),
+                transforms.ToTensor(),
+            ]
+        )
     )
-
-    # Split datasets
-    train_image_names, validation_image_names, test_image_names = split_dataset(
-        listdir(IMAGE_DIR), train_ratio=0.84, validation_ratio=0.15, test_ratio=0.01
-    )
-    print(f"Train data: {len(train_image_names)}")
-    print(f"Validation data: {len(validation_image_names)}")
-    print(f"Test data: {len(test_image_names)}")
 
     # Create datasets
-    train_dataset = YolicDataset(
-        IMAGE_DIR, LABEL_DIR, train_image_names, train_transform
-    )
-    validation_dataset = YolicDataset(
-        IMAGE_DIR, LABEL_DIR, validation_image_names, test_and_validation_transform
-    )
-    test_dataset = YolicDataset(
-        IMAGE_DIR, LABEL_DIR, test_image_names, test_and_validation_transform
-    )
+    train_dataset = YolicDataset(TRAIN_IMAGE_DIR, LABEL_DIR, train_transform)
+    validation_dataset = YolicDataset(VAL_IMAGE_DIR, LABEL_DIR, validation_transform)
+    print(f"Train data: {len(train_dataset)}")
+    print(f"Validation data: {len(validation_dataset)}")
 
     # Create data loaders
     train_loader = DataLoader(
@@ -211,12 +187,8 @@ def main():
     validation_loader = DataLoader(
         validation_dataset, batch_size=BATCH_SIZE, shuffle=True, num_workers=8
     )
-    test_loader = DataLoader(
-        test_dataset, batch_size=BATCH_SIZE, shuffle=True, num_workers=8
-    )
 
     # Train model
-
     train_loss = []
     validation_loss = []
     train_accuracy = []
@@ -268,7 +240,7 @@ def main():
                 "validation_accuracy": validation_accuracy,
             }
         ).to_csv(CSV_FILE, index=False)
-        print(f"Saved metrics as {CSV_FILE}")
+        print(f"Added new metrics to {CSV_FILE}")
 
 
 if __name__ == "__main__":

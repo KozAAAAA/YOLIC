@@ -1,3 +1,8 @@
+"""Common code for the Yolic training and testing scripts"""
+
+from typing import Any
+from os import listdir
+
 from PIL import Image
 
 import torch
@@ -11,8 +16,13 @@ from torchvision.models import mobilenet_v2
 
 NUMBER_OF_COIS = 104
 NUMBER_OF_CLASSES = 11
+YOLIC_NET_INPUT_WIDTH = 224
+YOLIC_NET_INPUT_HEIGHT = 224
 
-IMAGE_DIR = Path("./data/images/")
+TRAIN_IMAGE_DIR = Path("./data/split_images/train/outdoor/")
+VAL_IMAGE_DIR = Path("./data/split_images/val/outdoor/")
+TEST_IMAGE_DIR = Path("./data/split_images/test/outdoor/")
+
 LABEL_DIR = Path("./data/labels/")
 
 YOLIC_MODEL_PATH = Path("yolic_model.pt")
@@ -27,38 +37,35 @@ class YolicDataset(Dataset):
         self,
         image_dir: Path,
         label_dir: Path,
-        image_names: list[str],
         transform=None,
     ):
         """Initialize YolicDataset class"""
         self._image_dir = image_dir
         self._label_dir = label_dir
-        self._image_names = image_names
+        self._image_names = listdir(image_dir)
         self._transform = transform
 
     def __len__(self) -> int:
         """Return the length of the dataset"""
         return len(self._image_names)
 
-    def __getitem__(
-        self, index
-    ) -> tuple[Image.Image | torch.Tensor, torch.Tensor, str]:
+    def __getitem__(self, index) -> tuple[Any, torch.Tensor, str]:
         """Return image, label and image name"""
 
-        image_name = self._image_names[index]
+        image_name = Path(self._image_names[index])
 
         image_path = self._image_dir / image_name
-        label_path = self._label_dir / Path(image_name).with_suffix(".txt")
+        label_path = self._label_dir / image_name.with_suffix(".txt")
 
-        label = np.loadtxt(label_path, dtype=np.float32)
-        label = torch.from_numpy(label)
+        label = torch.from_numpy(np.loadtxt(fname=label_path, dtype=np.float32))
 
         image = Image.open(image_path).convert("RGB")
 
         if self._transform is not None:
             image = self._transform(image)
         # add random augmentation here
-        return image, label, image_name
+        filename = image_name.stem
+        return image, label, filename
 
 
 def yolic_net(weights=None) -> nn.Module:

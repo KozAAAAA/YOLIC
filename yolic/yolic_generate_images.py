@@ -1,24 +1,22 @@
 from yolic_common import (
     NUMBER_OF_CLASSES,
     YOLIC_MODEL_PATH,
-    IMAGE_DIR,
+    YOLIC_NET_INPUT_HEIGHT,
+    YOLIC_NET_INPUT_WIDTH,
+    TEST_IMAGE_DIR,
     LABEL_DIR,
     yolic_net,
     YolicDataset,
 )
 
+from pathlib import Path
 import cv2
 import numpy as np
 import torch
 from torchvision import transforms
-from sklearn.model_selection import train_test_split
-import os.path
-import os
 
+GENERATED_IMAGE_DIR = Path("generated_images")
 
-torch.cuda.empty_cache()
-
-save_name = "generated_images"
 points_list = [
     (288, 166),
     (322, 166),
@@ -302,6 +300,7 @@ color_box = [
 ]
 
 
+# not understood yet
 def pred_plot(frame, original, output):
     orig = original.detach().numpy()
     output = output.detach().numpy()
@@ -363,37 +362,39 @@ def pred_plot(frame, original, output):
 
 
 def main():
-    current_path = os.getcwd()
-    path = os.path.join(current_path, save_name)
-    if not os.path.exists(path):
-        os.makedirs(path)
+    """Test the model on the test dataset and save the predicted images"""
+    GENERATED_IMAGE_DIR.mkdir(parents=True, exist_ok=True)
 
     model = yolic_net()
     model.load_state_dict(torch.load(YOLIC_MODEL_PATH))
 
-    train_img, val_test = train_test_split(
-        os.listdir(IMAGE_DIR), test_size=0.3, random_state=2
+    transform = transforms.Compose(
+        (
+            [
+                transforms.Resize((YOLIC_NET_INPUT_HEIGHT, YOLIC_NET_INPUT_WIDTH)),
+                transforms.ToTensor(),
+            ]
+        )
     )
-    val_img, test_img = train_test_split(val_test, test_size=0.6666, random_state=2)
-    test_dataset = YolicDataset(IMAGE_DIR, LABEL_DIR, test_img)
 
-    preprocess = transforms.Compose([transforms.ToTensor()])
+    test_dataset = YolicDataset(TEST_IMAGE_DIR, LABEL_DIR)
 
     model.eval()
     with torch.no_grad():
-        for batch_idx, (image, target, filename) in enumerate(test_dataset):
-            image = cv2.cvtColor(
-                np.array(image), cv2.COLOR_RGB2BGR
-            )  # not necessary if transform in dataset
-            resize_image = cv2.resize(
-                image, (224, 224)
-            )  # use transform in dataset instead
-            input_tensor = preprocess(resize_image)  # use transform in dataset instead
-            input_batch = input_tensor.unsqueeze(0)
-            output = model(input_batch)
+        for image, target, filename in test_dataset:
+            transformed_image = transform(image)
+            transformed_image = transformed_image.unsqueeze(0)
+            output = model(transformed_image)
             output = torch.sigmoid(output)
-            frame = pred_plot(image, torch.Tensor.cpu(target), output[0])
-            cv2.imwrite(os.path.join(path, filename + ".jpg"), frame)
+
+            image = cv2.cvtColor(np.array(image), cv2.COLOR_RGB2BGR)
+            frame = pred_plot(
+                image, torch.Tensor.cpu(target), output[0]
+            )  # shouldnt it take tensors as inputs?
+
+            file_path = GENERATED_IMAGE_DIR / Path(filename).with_suffix(".png")
+            print(f"Saving {file_path}...")
+            cv2.imwrite(str(file_path), frame)
 
 
 if __name__ == "__main__":
