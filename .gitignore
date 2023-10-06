@@ -1,3 +1,6 @@
 __pycache__/
 venv/
-
+data/
+generated_images/
+training_data.csv
+yolic_model.pt
