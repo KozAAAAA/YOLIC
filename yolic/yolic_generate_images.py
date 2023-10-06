@@ -389,7 +389,7 @@ def main():
 
             image = cv2.cvtColor(np.array(image), cv2.COLOR_RGB2BGR)
             frame = pred_plot(
-                image, torch.Tensor.cpu(target), output[0]
+                image, target, output[0]
             )  # shouldnt it take tensors as inputs?
 
             file_path = GENERATED_IMAGE_DIR / Path(filename).with_suffix(".png")

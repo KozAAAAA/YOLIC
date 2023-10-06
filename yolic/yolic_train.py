@@ -222,6 +222,7 @@ def main():
             f"Validation accuracy: {epoch_validation_accuracy}",
         )
 
+        # TODO: Change metric to precision, recall or f1 score
         if epoch_validation_accuracy > previous_validation_accuracy:
             torch.save(model.state_dict(), YOLIC_MODEL_PATH)
             previous_validation_accuracy = epoch_validation_accuracy

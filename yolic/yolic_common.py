@@ -14,6 +14,8 @@ from pathlib import Path
 from torch.utils.data import Dataset
 from torchvision.models import mobilenet_v2
 
+# TODO: Move classes declaration here
+
 NUMBER_OF_COIS = 104
 NUMBER_OF_CLASSES = 11
 YOLIC_NET_INPUT_WIDTH = 224
@@ -29,7 +31,6 @@ YOLIC_MODEL_PATH = Path("yolic_model.pt")
 
 
 # TODO: lacks data augmentation as in the original code
-# TODO: if there is no transform applied, image is returned as PIL.Image
 class YolicDataset(Dataset):
     """Yolic Dataset class used to load images and label"""
 
