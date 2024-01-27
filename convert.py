@@ -4,8 +4,8 @@ import numpy as np
 from pathlib import Path
 
 # define directories and images resolution
-seg_dir = Path('../cars_dataset/labels/seg')
-label_dir = Path('yolic_labels')
+seg_dir = Path('./CarLast/validation/masks')
+label_dir = Path('./CarLast/validation/yolic_labels')
 cells_file = Path('./cell_design.json')
 img_res = (224, 224)
 
